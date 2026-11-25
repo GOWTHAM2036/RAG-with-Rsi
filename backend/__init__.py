@@ -1,1 +1,0 @@
-# EvoRAG backend root package

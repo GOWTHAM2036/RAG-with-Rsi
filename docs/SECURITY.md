@@ -1,0 +1,13 @@
+# Security boundaries
+
+Phase 02 accepts streamed request bodies and a validated logical filename. API callers cannot select a filesystem path or database. The local file helper accepts a trusted input directory and a single basename. Keep that directory and the database directory under the operator's control. Source labels, JSON pointers and chunks can reveal private information and are returned to local callers. This service has no authentication or tenant isolation. Protect the database, its journal files and backups with host filesystem permissions. Content and parser errors use safe codes in API responses and job records.
+
+Run this foundation on loopback. Its HTTP surface exposes liveness, readiness and FastAPI schema documentation. Configure the upstream URL only from trusted operator settings. The upstream inventory client rejects redirects, ignores ambient proxy settings, applies a total deadline, requests uncompressed metadata and bounds response size. Endpoint URLs reject user information, query strings and fragments. Provider errors expose a category without upstream bodies.
+
+Application logs contain lifecycle event names and timestamps. Uvicorn manages its own access logs. Private text, embeddings, model output, credentials and configuration values do not belong in logs or Git. Local environment files, private data directories, model weights, databases, indexes and generated benchmark results have ignore rules. Inspect the staged diff before committing. Ignore rules do not remove tracked data or existing history.
+
+Treat documents and model output as untrusted data. Future parsers must bound bytes, reject unsafe paths, validate media types and preserve provenance. Retrieved text must never authorize tool calls, commands, permission changes or deployments. Validate generated citations and vector lengths before accepting results. Authenticate and authorize access before exposing private corpora over a network.
+
+Use isolated offline experiments for RSI. Approval and rollback are mandatory for promotion. Development-agent access is independent of runtime provider access.
+
+Phase 04 retrieval enforces bounded query lengths (`16,384` chars), bounded query token counts (`128` tokens by default), bounded candidate sets (`max_candidates`), parameterized SQL across all metadata filters and posting lookups, and fail-closed errors on vector corruption or embedding-space mismatches. SQLite stores plaintext and the local API remains unauthenticated and loopback-oriented.

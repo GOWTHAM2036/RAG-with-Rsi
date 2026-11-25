@@ -1,0 +1,9 @@
+# Chunking and provenance
+
+Sizes and overlap use a replaceable TokenBudget interface. The default estimates one token per four Unicode code points, rounded up per chunk. The default window is 384 estimated tokens with 64 tokens of overlap. CJK, emoji and code can tokenize very differently in Qwen. Results carry the estimated flag. A future tokenizer supplies window ends, overlap starts and counts and has its own fingerprint.
+
+**Fixed** cuts at the largest allowed token window. **Recursive** chooses the last available paragraph break, then a newline, sentence ending, word boundary or hard cut. It searches beyond the overlap and the previous end so every chunk adds new text. **Structure** applies the boundary algorithm inside each parser section and resets overlap at section boundaries. A short section can produce one short chunk.
+
+The normalized source string uses Python Unicode character indices. Every emitted chunk is an exact slice between start (inclusive) and end (exclusive). Pure whitespace windows are skipped. Each source entry identifies the intersecting section, its clipped normalized range and, when available, the encompassing parsed source range. A parsed range may include more text than its chunk. Line labels and structured locations are separate from character offsets. Original file byte offsets are unavailable. Inspect a section's normalized and parsed offsets separately after BOM removal, NFC, CRLF conversion or structured extraction.
+
+The service fingerprints the strategy, token budget, overlap and tokenizer implementation. The chunk ID hashes the revision key, tokenizer ID, start and end. With the same source name, bytes and transformation configuration, independent SQLite databases produce identical chunk IDs. Chunk count, total output and positive progress checks bound work under high overlap.

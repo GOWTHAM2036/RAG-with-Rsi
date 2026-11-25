@@ -1,0 +1,12 @@
+# Engineering decisions
+
+Phase 02 uses raw HTTP uploads to enforce limits as frames arrive and avoid multipart dependencies. Logical identity uses the validated filename, so callers ingesting independent sources with the same basename must supply distinct labels. A raw-byte change or changed transformation configuration produces a distinct revision. The SQLite writer streams validated chunks inside a transaction to keep duplicate checks and publication atomic. No application dependency was added.
+
+1. The importable package lives in `backend/evorag`. The initial working tree already had deletions under `backend/app`. A distinct package preserves those changes and installs cleanly from a wheel.
+2. Python 3.11 is the minimum for native TOML parsing and bounded asyncio timeouts. Use a separate Python 3.12 environment on this machine. Packaging and dependency declarations live in pyproject.toml.
+3. Pydantic validates file and environment settings as one object. Frozen payloads and tuple fields preserve invariants across engine boundaries. FastAPI, HTTPX, Uvicorn and psutil cover current runtime needs. Add NumPy with the first vector implementation.
+4. Status endpoints work offline. Only readiness contacts the configured provider, for bounded inventory metadata. A process-scoped client disables environment proxies and redirects. The initial server binds to loopback.
+5. The requested Ollama generation tag is a registry alias for the Q4_K_M Instruct variant. Configure the exact requested aliases, and report installation separately. Runtime discovery never pulls weights. [Generation tags](https://ollama.com/library/qwen3/tags) · [embedding tags](https://ollama.com/library/qwen3-embedding/tags).
+6. No model orchestration, frontend runtime, database migration or background service is needed for this phase. Design and review sessions in Antigravity are development tools and add no application dependency.
+7. Phase 04 implements custom lexical analysis, SQLite inverted indexing, BM25, RRF, and CPU-only reranking without external RAG frameworks or SQLite FTS. Legacy `POST /api/v1/retrieve` requests using `question` without `mode` default to `dense` for Phase 03 compatibility, while `query` requests default to `settings.retrieval.mode` (`hybrid`).
+8. BM25 sums repeated query terms in order (bounded by `max_query_tokens`). Superseded document revisions are marked `is_latest=0` in `sparse_chunks` and excluded from active `df`/`doc_count`/`total_length` unless explicitly requested via `version` or `latest_only=false`.

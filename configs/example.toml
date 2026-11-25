@@ -1,0 +1,51 @@
+# Optional TOML override. Other values inherit their validated defaults.
+[runtime]
+context_window = 4096
+max_output_tokens = 768
+
+[resources]
+minimum_free_ram_gb = 3
+project_storage_budget_gb = 20
+
+[ingestion]
+max_file_size_mb = 10
+max_extracted_text_mb = 20
+max_batch_documents = 10
+max_chunks_per_document = 10000
+allowed_extensions = [".txt", ".md", ".csv", ".json"]
+whitespace = "preserve"
+
+[chunking]
+strategy = "recursive"
+chunk_size = 384
+overlap = 64
+tokenizer = "estimated"
+
+[storage]
+database_path = "data/evorag.sqlite3"
+sqlite_wal = true
+busy_timeout_ms = 5000
+
+[retrieval]
+mode = "hybrid"
+dense_top_k = 20
+sparse_top_k = 20
+final_top_k = 5
+allow_sparse_fallback = true
+
+[sparse]
+analyzer_version = "v1"
+k1 = 1.5
+b = 0.75
+preserve_compound_identifiers = true
+remove_stopwords = false
+
+[fusion]
+method = "rrf"
+k = 60
+dense_weight = 1.0
+sparse_weight = 1.0
+
+[reranking]
+enabled = false
+max_candidates = 40
