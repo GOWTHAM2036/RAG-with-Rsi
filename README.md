@@ -34,6 +34,15 @@ Invoke-RestMethod -Method Post -Uri "$api/retrieve" -ContentType 'application/js
 Invoke-RestMethod "$api/index/status"
 ```
 
+## Adaptive RAG and query planning
+
+```powershell
+Invoke-RestMethod -Method Post -Uri "$api/rag/plan" -ContentType 'application/json' -Body '{"question":"Compare vector storage with SQLite WAL.","strategy":"adaptive"}'
+Invoke-RestMethod -Method Post -Uri "$api/rag/query" -ContentType 'application/json' -Body '{"question":"What database mode does EvoRag use?","strategy":"adaptive","include_query_plan":true}'
+```
+
+See [query intelligence](docs/QUERY_INTELLIGENCE.md), [adaptive RAG](docs/ADAPTIVE_RAG.md), [multi-query retrieval](docs/MULTI_QUERY_RETRIEVAL.md), [retrieval cache](docs/RETRIEVAL_CACHE.md), and [adaptive RAG benchmarks](docs/ADAPTIVE_RAG_BENCHMARKS.md).
+
 ## Repository guide
 
 | Path | Contents |
@@ -42,6 +51,7 @@ Invoke-RestMethod "$api/index/status"
 | `backend/tests/` | Deterministic unit and ASGI integration tests |
 | `configs/example.toml`, `.env.example` | Optional file and process environment overrides |
 | `docs/` | Architecture, decisions, development, security, hardware budget and verified project state |
+| `frontend/` | React 18 + TypeScript + Vite + Tailwind Neural Intelligence Console (`npm run dev`, `npm test`, `npm run build`) |
 | `.github/workflows/foundation.yml` | Windows and Linux verification |
 
 Start with the [development guide](docs/DEVELOPMENT.md) for configuration and test commands. The [roadmap](ROADMAP.md) gives milestone dependencies and the [project state](docs/PROJECT_STATE.md) records measured results and open issues.

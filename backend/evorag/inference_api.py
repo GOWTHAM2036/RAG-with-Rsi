@@ -14,8 +14,18 @@ from starlette.types import Message, Receive, Scope, Send
 
 from .config import Settings
 from .coordinator import Coordinator
+from .dataset_registry import DatasetRegistry
 from .embedding_engine import EmbeddingEngine, EmbeddingJob, EmbeddingRequest, EmbeddingResponse
 from .errors import IngestionError
+from .eval_types import (
+    DatasetVersion,
+    EvaluationReport,
+    EvaluationRun,
+    EvaluationRunResult,
+    ExperimentComparison,
+    ExperimentConfiguration,
+)
+from .experiment_runner import ExperimentRunner
 from .hybrid_retrieval import HybridRetriever, RetrieveRequest, RetrieveResponse
 from .inference_types import (
     GenerationEvent,
@@ -26,7 +36,25 @@ from .inference_types import (
     ProviderHealth,
 )
 from .ollama import Ollama
+from .query_types import RetrievalPlan
+from .rag_service import RAGService
+from .rag_types import (
+    RAGExecutionTrace,
+    RAGRequest,
+    RAGResponse,
+    RAGStatusReport,
+    RAGStreamEvent,
+)
+from .reflection_types import ReflectionStatusReport
 from .retrieval import DenseRetriever
+from .rsi_engine import RSIEngine
+from .rsi_types import (
+    ConfigurationVersion,
+    PromotionRecommendation,
+    RSICycle,
+    RSIReport,
+    RSIStatusReport,
+)
 from .sparse_index import SparseIndex, SparseIndexJob, SparseIndexStatus
 
 
@@ -40,6 +68,10 @@ class InferenceServices:
     readers: asyncio.Semaphore
     sparse_index: SparseIndex
     hybrid_retriever: HybridRetriever
+    rag: RAGService
+    dataset_registry: DatasetRegistry
+    experiment_runner: ExperimentRunner
+    rsi_engine: RSIEngine
 
 
 async def inference_services(request: Request) -> InferenceServices:
@@ -261,3 +293,176 @@ async def index_rebuild(engine: Engine, force: bool = True) -> SparseIndexJob:
 @router.get("/index/jobs/{job_id}")
 def index_job(job_id: str, engine: Engine) -> SparseIndexJob:
     return engine.sparse_index.job_status(job_id)
+
+
+class RagNdjsonResponse(StreamingResponse):
+    media_type = "application/x-ndjson"
+
+    def __init__(self, first: RAGStreamEvent, events: AsyncGenerator[RAGStreamEvent, None]):
+        self.events = events
+        super().__init__(
+            self.lines(first), media_type=self.media_type, headers={"Cache-Control": "no-store"}
+        )
+
+    async def lines(self, first: RAGStreamEvent) -> AsyncIterator[bytes]:
+        yield first.model_dump_json().encode() + b"\n"
+        async for item in self.events:
+            yield item.model_dump_json().encode() + b"\n"
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        try:
+            await super().__call__(scope, receive, send)
+        finally:
+            await self.events.aclose()
+
+
+@router.post("/rag/query")
+async def rag_query(request: Request, body: RAGRequest, engine: Engine) -> RAGResponse:
+    return await _while_connected(request, engine.rag.query(body))
+
+
+@router.post("/rag/plan")
+async def rag_plan(request: Request, body: RAGRequest, engine: Engine) -> RetrievalPlan:
+    return await _while_connected(request, engine.rag.plan_query(body))
+
+
+@router.post("/rag/query/stream", response_class=RagNdjsonResponse, status_code=200)
+async def rag_query_stream(request: Request, body: RAGRequest, engine: Engine) -> Response:
+    events = engine.rag.stream_query(body)
+    try:
+        first = await _while_connected(request, anext(events))
+    except StopAsyncIteration:
+        raise ProviderError("invalid_response", 502) from None
+    return RagNdjsonResponse(first, events)
+
+
+@router.get("/rag/traces/{trace_id}")
+def rag_trace(trace_id: str, engine: Engine) -> RAGExecutionTrace:
+    trace = engine.rag.traces.get(trace_id)
+    if trace is None:
+        raise IngestionError("trace_not_found", 404)
+    return trace
+
+
+@router.get("/rag/status")
+def rag_status(engine: Engine) -> RAGStatusReport:
+    return engine.rag.status()
+
+
+@router.get("/rag/reflection/status")
+def rag_reflection_status(engine: Engine) -> ReflectionStatusReport:
+    ref = engine.settings.reflection
+    return ReflectionStatusReport(
+        enabled=ref.enabled,
+        mode=ref.mode,
+        trigger_policy=ref.trigger_policy,
+        max_cycles=ref.max_cycles,
+        max_total_model_calls=ref.max_total_model_calls,
+        semantic_enabled=ref.semantic.enabled,
+    )
+
+
+@router.get("/evaluation/datasets")
+def evaluation_datasets(engine: Engine) -> tuple[DatasetVersion, ...]:
+    return engine.dataset_registry.list_datasets()
+
+
+@router.post("/evaluation/runs")
+async def evaluation_run(config: ExperimentConfiguration, engine: Engine) -> EvaluationRunResult:
+    if not engine.settings.evaluation.enabled or not engine.settings.experiments.enabled:
+        raise IngestionError("evaluation_disabled", 503)
+    try:
+        return await engine.experiment_runner.run(config)
+    except KeyError:
+        raise IngestionError("dataset_not_found", 404) from None
+    except RuntimeError:
+        raise IngestionError("evaluation_busy", 409) from None
+
+
+@router.get("/evaluation/runs/{run_id}")
+def evaluation_run_get(run_id: str, engine: Engine) -> EvaluationRunResult:
+    res = engine.experiment_runner.store.get_run(run_id)
+    if res is None:
+        raise IngestionError("evaluation_run_not_found", 404)
+    return res
+
+
+@router.post("/evaluation/runs/{run_id}/cancel")
+def evaluation_run_cancel(run_id: str, engine: Engine) -> EvaluationRun:
+    run = engine.experiment_runner.cancel(run_id)
+    if run is None:
+        raise IngestionError("evaluation_run_not_found", 404)
+    return run
+
+
+@router.get("/evaluation/runs/{run_id}/report")
+def evaluation_run_report(run_id: str, engine: Engine) -> EvaluationReport:
+    try:
+        return engine.experiment_runner.build_report(run_id)
+    except KeyError:
+        raise IngestionError("evaluation_run_not_found", 404) from None
+
+
+@router.post("/evaluation/compare")
+def evaluation_compare(
+    baseline_run_id: str, candidate_run_id: str, engine: Engine
+) -> ExperimentComparison:
+    try:
+        return engine.experiment_runner.compare(baseline_run_id, candidate_run_id)
+    except KeyError:
+        raise IngestionError("evaluation_run_not_found", 404) from None
+
+
+@router.get("/rsi/status")
+def rsi_status(engine: Engine) -> RSIStatusReport:
+    return engine.rsi_engine.status()
+
+
+@router.post("/rsi/cycles")
+async def rsi_run_cycle(
+    engine: Engine,
+    dataset_id: str = "evorag_comprehensive_v1",
+    max_dev_cases: int = 10,
+) -> RSIReport:
+    if not engine.settings.rsi.enabled:
+        raise IngestionError("rsi_disabled", 503)
+    try:
+        return await engine.rsi_engine.run_cycle(
+            dataset_id=dataset_id, max_dev_cases=min(max_dev_cases, 30)
+        )
+    except RuntimeError:
+        raise IngestionError("rsi_busy", 409) from None
+
+
+@router.get("/rsi/cycles/{cycle_id}")
+def rsi_get_cycle(cycle_id: str, engine: Engine) -> RSICycle:
+    rep = engine.rsi_engine.store.get_report(cycle_id)
+    if rep is None:
+        raise IngestionError("rsi_cycle_not_found", 404)
+    return rep.cycle
+
+
+@router.post("/rsi/cycles/{cycle_id}/cancel")
+def rsi_cancel_cycle(cycle_id: str, engine: Engine) -> RSICycle:
+    cyc = engine.rsi_engine.cancel(cycle_id)
+    if cyc is None:
+        raise IngestionError("rsi_cycle_not_found", 404)
+    return cyc
+
+
+@router.get("/rsi/cycles/{cycle_id}/report")
+def rsi_get_report(cycle_id: str, engine: Engine) -> RSIReport:
+    rep = engine.rsi_engine.store.get_report(cycle_id)
+    if rep is None:
+        raise IngestionError("rsi_cycle_not_found", 404)
+    return rep
+
+
+@router.get("/rsi/recommendations")
+def rsi_recommendations(engine: Engine) -> tuple[PromotionRecommendation, ...]:
+    return engine.rsi_engine.store.list_recommendations()
+
+
+@router.get("/rsi/configurations")
+def rsi_configurations(engine: Engine) -> tuple[ConfigurationVersion, ...]:
+    return engine.rsi_engine.store.list_versions()

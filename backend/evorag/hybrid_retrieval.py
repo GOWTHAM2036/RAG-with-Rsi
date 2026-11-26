@@ -50,6 +50,8 @@ class RetrieveRequest(Contract):
     filters: MetadataFilter | None = None
     reranking_enabled: bool | None = None
     include_explanations: bool = False
+    dense_weight_override: Annotated[FiniteFloat, Field(ge=0.0)] | None = None
+    sparse_weight_override: Annotated[FiniteFloat, Field(ge=0.0)] | None = None
 
     @model_validator(mode="after")
     def check_query_text(self) -> Self:
@@ -316,8 +318,16 @@ class HybridRetriever:
             dense_ranked,
             sparse_ranked,
             k=self.settings.fusion.k,
-            dense_weight=self.settings.fusion.dense_weight,
-            sparse_weight=self.settings.fusion.sparse_weight,
+            dense_weight=(
+                request.dense_weight_override
+                if request.dense_weight_override is not None
+                else self.settings.fusion.dense_weight
+            ),
+            sparse_weight=(
+                request.sparse_weight_override
+                if request.sparse_weight_override is not None
+                else self.settings.fusion.sparse_weight
+            ),
             sparse_matched_terms=terms_map,
             top_k=self.settings.reranking.max_candidates if rerank_enabled else final_top_k,
         )

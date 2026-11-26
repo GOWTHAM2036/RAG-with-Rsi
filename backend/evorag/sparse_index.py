@@ -341,16 +341,17 @@ class SparseIndex:
                 )
             indexed = 0
             try:
-                for row in versions:
+                for idx, row in enumerate(versions, start=1):
                     doc_id = str(row["document_id"])
                     ver = int(row["version"])
                     self.index_version(doc_id, ver, force=force)
                     indexed += int(row["chunk_count"])
-                    with self.transaction(write=True) as db:
-                        db.execute(
-                            "UPDATE sparse_index_jobs SET indexed_chunks=? WHERE job_id=?",
-                            (indexed, job_id),
-                        )
+                    if idx % 25 == 0:
+                        with self.transaction(write=True) as db:
+                            db.execute(
+                                "UPDATE sparse_index_jobs SET indexed_chunks=? WHERE job_id=?",
+                                (indexed, job_id),
+                            )
                 with self.transaction(write=True) as db:
                     db.execute(
                         "UPDATE sparse_index_jobs SET status='complete', indexed_chunks=? "

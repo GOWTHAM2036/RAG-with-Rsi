@@ -1,5 +1,6 @@
 # Optional TOML override. Other values inherit their validated defaults.
 [runtime]
+generation_model = "qwen3:4b"
 context_window = 4096
 max_output_tokens = 768
 
@@ -49,3 +50,168 @@ sparse_weight = 1.0
 [reranking]
 enabled = false
 max_candidates = 40
+
+[rag]
+enabled = true
+default_retrieval_mode = "hybrid"
+max_evidence_items = 5
+allow_partial_answers = true
+require_citations = true
+reranking_enabled = false
+
+[context]
+max_context_tokens = 4096
+system_token_budget = 384
+question_token_budget = 256
+history_token_budget = 384
+evidence_token_budget = 2048
+reserved_output_tokens = 768
+safety_margin_tokens = 256
+
+[prompts]
+default_template = "grounded_v1"
+
+[citations]
+validate_identifiers = true
+reject_unknown_sources = true
+
+[conversation]
+enabled = true
+max_history_messages = 6
+persist_history = false
+
+[tracing]
+enabled = true
+store_raw_prompts = false
+store_raw_questions = false
+max_records = 10000
+
+[adaptive_rag]
+enabled = true
+default_strategy = "baseline"
+max_query_variants = 3
+max_subqueries = 3
+max_retrieval_executions = 4
+max_aggregate_candidates = 80
+max_planning_llm_calls = 1
+request_deadline_seconds = 30.0
+
+[query_analysis]
+enabled = true
+classifier = "heuristic"
+llm_classification_enabled = false
+
+[query_rewriting]
+enabled = true
+llm_enabled = false
+preserve_original = true
+
+[query_decomposition]
+enabled = true
+llm_enabled = false
+max_depth = 1
+max_subqueries = 3
+
+[multi_query]
+enabled = true
+original_weight = 1.0
+rewrite_weight = 0.8
+subquery_weight = 0.7
+
+[retrieval_cache]
+enabled = true
+max_entries = 256
+ttl_seconds = 300
+
+[evaluation]
+enabled = true
+default_execution_mode = "offline"
+max_cases_per_run = 200
+max_concurrent_runs = 1
+persist_raw_inputs = false
+
+[evaluation.judge]
+enabled = false
+provider = "ollama"
+model = "qwen3:4b"
+max_calls_per_case = 1
+
+[evaluation.statistics]
+confidence_level = 0.95
+bootstrap_samples = 1000
+seed = 42
+
+[evaluation.storage]
+max_runs = 100
+max_storage_mb = 256
+
+[experiments]
+enabled = true
+automatic_promotion = false
+max_candidate_configurations = 5
+
+[reflection]
+enabled = false
+mode = "deterministic"
+trigger_policy = "on_failure"
+max_cycles = 1
+max_critique_calls = 1
+max_correction_calls = 1
+max_additional_retrievals = 2
+max_total_model_calls = 3
+
+[reflection.semantic]
+enabled = false
+provider = "ollama"
+model = "qwen3:4b"
+allow_uncertain_assessment = true
+
+[reflection.correction]
+allow_targeted_retrieval = true
+allow_regeneration = true
+allow_partial_answer = true
+require_final_validation = true
+max_query_variants = 2
+
+[reflection.tracing]
+enabled = true
+store_raw_critiques = false
+
+[rsi]
+enabled = false
+automatic_promotion = false
+automatic_rollback = false
+automatic_scheduling = false
+optimization_strategy = "coordinate_search"
+max_cycles = 2
+max_candidates_per_cycle = 3
+max_experiments = 6
+max_concurrent_experiments = 1
+max_execution_seconds = 300.0
+seed = 42
+
+[rsi.feedback]
+enabled = true
+minimum_samples = 10
+store_raw_queries = false
+
+[rsi.optimization]
+llm_enabled = false
+max_llm_calls_per_cycle = 1
+allow_reindexing = false
+minimum_quality_improvement = 0.03
+
+[rsi.validation]
+require_independent_holdout = true
+require_live_quality_for_promotion = true
+max_holdout_finalist_evaluations = 1
+max_latency_regression = 0.20
+max_memory_regression = 0.15
+
+[rsi.storage]
+max_cycles_retained = 100
+max_storage_mb = 256
+
+[rsi.promotion]
+require_owner_approval = true
+allow_offline_promotion = false.0

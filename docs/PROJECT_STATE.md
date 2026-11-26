@@ -96,3 +96,99 @@ Preflight reproduced **187 passing offline tests in 21.56 s** with **96.09%** br
 | Benchmarks | 54-query offline fixture evaluation + 1,000/10,000-chunk latency/RAM benchmarks recorded in [RETRIEVAL_BENCHMARKS.md](RETRIEVAL_BENCHMARKS.md). |
 
 Live Ollama model verification and 50k/100k-chunk benchmarks remain pending owner authorization and sufficient free RAM. Owner approval is required before Phase 05 grounded generation.
+
+## Phase 05 handoff · 26 November 2026
+
+Phase 05 offline grounded generation and end-to-end RAG passed local Windows verification on Python 3.12.11. Preflight reproduced 203 Phase 04 tests (95.22% coverage), Ruff, strict mypy (56 files), and `pip check`. Available RAM was ~2.25 GiB (below the 3 GiB floor) and `qwen3:4b-instruct` / `qwen3-embedding:0.6b` were not installed, so live model verification remains pending owner authorization.
+
+| Check | Local Windows result |
+| --- | --- |
+| Offline unit and integration suite | **224 passed**, branch-inclusive coverage **>= 95%** (gate 90%), all new Phase 05 modules >= 90%. |
+| Format, lint, static types | `ruff check backend benchmarks`, `ruff format --check backend benchmarks`, strict `mypy` (68 source files), and `pip check` all passed. |
+| Offline RAG QA & orchestration benchmark | 42 QA cases (`21 dev`, `21 held_out`): citation validity `1.0000`, expected evidence recall `0.8824`, abstention accuracy `1.0000`, cold `44.77 ms`, median `22.41 ms`, p95 `74.59 ms`, additional RAM `4.17 MiB`. |
+
+New Phase 05 modules: `rag_types.py`, `context_engine.py`, `prompt_engine.py`, `conversation.py`, `citations.py`, `admission.py`, `tracing.py`, `rag_service.py`, plus `/api/v1/rag/query`, `/api/v1/rag/query/stream`, `/api/v1/rag/traces/{trace_id}`, `/api/v1/rag/status`, and `benchmarks/rag_benchmark.py`. Owner approval is required before Phase 06 evaluation/UI/deployment and before live Ollama verification.
+
+## Phase 06 handoff · 26 November 2026
+
+Phase 06 offline adaptive RAG and query intelligence passed local Windows verification on Python 3.12.11. Preflight reproduced all 224 Phase 05 tests (`95.28%` coverage), Ruff, strict mypy (68 files), and `pip check`. Live Ollama inspection confirmed `qwen3:4b` (`4.0B`, `Q4_K_M`, digest `359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`, capabilities `completion`/`tools`/`thinking`), and `Ollama._chat_body` enforces `think: false`. `configs/example.toml` was updated with `generation_model = "qwen3:4b"` while keeping `"qwen3:4b-instruct"` as the `ModelConfiguration` schema default so Phase 03 unit tests remain untouched. `qwen3-embedding:0.6b` remains absent and pending owner-authorized download; available RAM was ~3.01 GiB (`3,230,195,712` bytes), so live end-to-end verification remains pending.
+
+| Check | Local Windows result |
+| --- | --- |
+| Offline unit and integration suite | **242 passed**, branch-inclusive coverage **94.95%** (gate 90%), all new Phase 06 modules >= 90%. |
+| Format, lint, static types | `ruff check backend benchmarks`, `ruff format --check backend benchmarks`, strict `mypy` (79 source files), and `pip check` all passed. |
+| Adaptive RAG benchmark (`benchmarks/adaptive_rag_benchmark.py`) | 64 cases (`32 dev`, `32 held_out`): query analysis median `0.057 ms` (p95 `0.081 ms`), deterministic planning p95 `0.301 - 0.393 ms`, cache-hit median `17.03 - 18.87 ms`, additional peak RAM `0.51 - 2.73 MiB`, synthetic/mocked `P@5 = 1.0000`, `R@5 = 0.8611`, `MRR = 1.0000`, `nDCG@5 = 0.8925`. |
+
+New Phase 06 modules: `query_types.py`, `query_analysis.py`, `query_rewriting.py`, `query_decomposition.py`, `query_planner.py`, `retrieval_cache.py`, `multi_query_retrieval.py`, `evidence_consolidation.py`, plus `POST /api/v1/rag/plan`, `strategy="adaptive"` on `POST /api/v1/rag/query`, and `benchmarks/adaptive_rag_benchmark.py`. `default_strategy` remains `"baseline"` until live model evaluation demonstrates semantic gains. Owner approval is required before live Ollama verification, Phase 07 evaluation engine, frontend development, or deployment.
+
+## Phase 07 handoff · 26 November 2026
+
+Phase 07 offline evaluation and experimentation engine passed local Windows verification on Python 3.12.11. Preflight reproduced all 244 Phase 06 tests (`94.97%` coverage), Ruff, strict mypy (83 files), and `pip check`. Resolved generation-model configuration debt by migrating `ModelConfiguration.generation_model` default from `qwen3:4b-instruct` to the installed `qwen3:4b` (`Q4_K_M`, digest `359d7dd4bcdab3d86b87d73ac27966f4dbb9f5efdfcc75d34a8764a09474fae7`). `qwen3-embedding:0.6b` remains absent and pending owner-authorized download.
+
+| Check | Local Windows result |
+| --- | --- |
+| Offline unit and integration suite | **249 passed**, branch-inclusive coverage **>= 94%** (gate 90%), all new Phase 07 evaluation modules >= 90%. |
+| Format, lint, static types | `ruff check backend benchmarks`, `ruff format --check backend benchmarks`, strict `mypy` (95 source files), and `pip check` all passed. |
+| Evaluation benchmark (`benchmarks/evaluation_benchmark.py`) | `evorag_comprehensive_v1` (108 cases: `54 dev`, `54 held_out`): 54 dev cases/run, statistical comparison `28.24 ms`, additional peak RAM `12.79 MiB`, `automatic_promotion = False`. |
+
+New Phase 07 modules: `eval_types.py`, `dataset_registry.py`, `eval_metrics.py`, `failure_analysis.py`, `eval_stats.py`, `quality_gates.py`, `experiment_store.py`, `experiment_runner.py`, `eval_cli.py`, `/api/v1/evaluation/*` endpoints, and `benchmarks/evaluation_benchmark.py`. Owner approval is required before live Ollama verification or Phase 08 self-reflective RAG.
+
+## Phase 08 handoff · 26 November 2026
+
+Phase 08 offline self-reflective RAG and bounded correction engine passed local Windows verification on Python 3.12.11. Preflight reproduced all 249 Phase 07 tests (`94.95%` coverage), Ruff, strict mypy (95 files), and `pip check`. Reflection remains disabled by default (`reflection.enabled = false`, `reflection.semantic.enabled = false`), and `qwen3-embedding:0.6b` remains absent and pending owner-authorized download.
+
+| Check | Local Windows result |
+| --- | --- |
+| Offline unit and integration suite | **256 passed**, branch-inclusive coverage **>= 94%** (gate 90%). |
+| Format, lint, static types | `ruff check backend benchmarks`, `ruff format --check backend benchmarks`, strict `mypy` (104 source files), and `pip check` all passed. |
+| Reflection benchmark (`benchmarks/reflection_benchmark.py`) | 80-case dataset (`40 dev`, `40 held_out`): trigger recall `1.0`, correction success `1.0`, regression rate `0.0`, reflective median `37.08 ms`, p95 `113.27 ms`, additional RAM `5.06 MiB`. |
+
+New Phase 08 modules: `reflection_types.py`, `reflection_state.py`, `verification.py`, `correction_planner.py`, `reflection_engine.py`, `rsi_interfaces.py`, `GET /api/v1/rag/reflection/status`, and `benchmarks/reflection_benchmark.py`. Owner approval is required before live Ollama verification or Phase 09 RSI.
+
+## Phase 09 handoff · 26 November 2026
+
+Phase 09 offline Recursive Self-Improvement (RSI) engine passed local Windows verification on Python 3.12.11. Phase 08 hardening raised `correction_planner.py` and `reflection_engine.py` coverage above 90%. RSI remains disabled by default (`rsi.enabled = false`, `automatic_promotion = false`, `automatic_rollback = false`), and `qwen3-embedding:0.6b` remains absent and pending owner-authorized download.
+
+| Check | Local Windows result |
+| --- | --- |
+| Offline unit and integration suite | **262 passed**, branch-inclusive coverage **>= 94%** (gate 90%). |
+| Format, lint, static types | `ruff check backend benchmarks`, `ruff format --check backend benchmarks`, strict `mypy` (115 source files), and `pip check` all passed. |
+| RSI benchmark (`benchmarks/rsi_benchmark.py`) | 30 scenarios + 3 bounded experiments: candidate gen p95 `0.235 ms`, validation p95 `0.010 ms`, additional RAM `7.89 MiB`. |
+
+New Phase 09 modules: `rsi_types.py`, `rsi_state.py`, `rsi_search_space.py`, `rsi_analysis.py`, `rsi_optimizer.py`, `rsi_store.py`, `rsi_engine.py`, `rsi_cli.py`, `/api/v1/rsi/*` read-only/bounded endpoints, and `benchmarks/rsi_benchmark.py`. Owner approval is required before live Ollama verification or Phase 10 optimization/UI/deployment.
+
+## Phase 10 handoff · 26 November 2026
+
+Phase 10 (System Hardening, Live Verification and Performance Optimization) passed local Windows verification on Python 3.12.11:
+- **Hardening & 2-Cycle RSI**: Closed remaining coverage gaps in `rsi_search_space.py`, `rsi_analysis.py`, `rsi_optimizer.py`, `rsi_engine.py`, and `reflection_engine.py`; verified 2-cycle recursive improvement (`cycles_completed == 2`) with strict experiment isolation (`active_version` and runtime `settings` unchanged).
+- **Performance Optimization**: Reduced SQLite WAL transaction overhead in `SparseIndex.rebuild_all` by batching job progress updates every 25 document versions.
+- **Live Admission Verification**: Checked `Coordinator.admission('qwen3:4b')` against live Ollama (`127.0.0.1:11550`): `admitted = False`, `reason = 'insufficient_memory'` (`available_ram_bytes = 1,887,117,312` < `required_ram_bytes = 6,792,261,227`). The 3 GiB floor was preserved and no models were downloaded.
+
+Owner approval is required before frontend development or deployment.
+
+## Frontend UI & Knowledge Explorer · 26 November 2026
+
+Implemented `frontend/` (React 18, TypeScript, Vite, Tailwind CSS) and bounded `GET /api/v1/graph/provenance` (`backend/evorag/graph_api.py`, `backend/evorag/main.py` CORS for `http://127.0.0.1:5173` and `http://localhost:5173`, `backend/tests/integration/test_graph_api.py`):
+- **Four Signature Views**: `Knowledge Explorer` (3-panel force-directed 2D graph with zoom/pan, search, cluster/type filters, density slider, low-perf toggle, camera focus/reset, fullscreen, accessible table view, query-driven pulse/particle animation), `Command Center` (live status + `POST /api/v1/rag/query/stream` console), `Pipeline Explorer`, and `RSI Evolution Tree` (`v0_baseline` lineage and owner CLI workflow; no unauthenticated promotion/rollback endpoints).
+- **Backend Verification**: `ruff format`, `ruff check`, strict `mypy` (117 source files), and `pytest` (**263 passed**, **94.48%** branch-inclusive coverage).
+- **Frontend Verification**: `npm.cmd run build` (`tsc -b && vite build`) succeeded cleanly (`dist/assets/index-vX4Ss4F4.js`, `178.23 kB`).
+
+## Frontend UI Phase 11.2 · 26 November 2026
+
+Upgraded `frontend/` to the **EvoRAG Neural Intelligence Console** (`Retrieval. Reflection. Evolution.`):
+- **Shell & Design System**: Collapsible grouped sidebar, `EvoRagLogo`, `CommandPalette` (`Ctrl+K`), `ShellDrawer` (notifications, global inspector, appearance/performance toggles), `PlannedPageView` (honest `PLANNED` badges for Phase 11.3+ pages), and `Primitives.tsx`.
+- **Signature Views**:
+  - `CommandCenter.tsx` (default landing view, asymmetrical bento grid + `LivingRagCore.tsx` 3D-projected neural sphere with 2D fallback and offscreen `IntersectionObserver` suspension).
+  - `KnowledgeExplorer.tsx` (240+ node deterministic demo corpus in `src/data/demoCorpus.ts`, cluster isolation, progressive labels, 1-hop/2-hop neighbor expansion, 2D/3D depth toggle, accessible table fallback, explicit `DEMO` vs `LIVE` separation).
+  - `PipelineExplorer.tsx` (10-stage interactive execution DAG, timeline scrubber, static architecture vs recorded execution distinction).
+  - `RSIEvolutionTree.tsx` (configuration lineage + side-by-side candidate comparison with statistical intervals and owner CLI workflow; no HTTP promotion/rollback controls).
+- **Frontend Checks**: `npm.cmd run typecheck` (`tsc --noEmit`), `npm.cmd run test` (`vitest run`: 3 passed), `npm.cmd run build` (`238.23 kB` JS / `70.30 kB` gzipped), and Playwright browser verification across `1440x900`, `1280x800`, `768x1024`, and `390x844`.
+
+## Frontend UI Phase 11.3 · 26 November 2026
+
+Implemented **RAG Playground**, **Document Management**, and **Retrieval Lab** with strict `LIVE` vs `DEMO` separation (explicit user-consented switching; never silently mixing live and synthetic data):
+- **New Components**: `RAGPlayground.tsx` (lazy), `DocumentManagement.tsx` (lazy), `RetrievalLab.tsx` (lazy), `utils/markdown.tsx` (XSS-safe Markdown renderer), expanded `api.ts` (`consumeNdjsonStream`, `ApiError`, document/embedding/retrieve/trace endpoints) and `demoCorpus.ts`.
+- **Cross-View Integration**: Citations navigate to Document Management & Knowledge Explorer; traces link to Pipeline Explorer; Document Management & Retrieval Lab jump directly to Knowledge Explorer nodes.
+- **Verification**: `npm.cmd run typecheck` passed; `npm.cmd run test` passed (**6/6 tests**); `npm.cmd run build` passed (`249.50 kB` main JS / `73.75 kB` gzipped + lazy chunks); Playwright verified RAG Playground, Citation Inspector, Document Management, Retrieval Lab, and mobile (`390x844`) navigation.
+
+Owner approval is required before Evaluation Arena, Reflection Lab, and Experiment Lab (Phase 11.4).

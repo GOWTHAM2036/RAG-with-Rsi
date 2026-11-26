@@ -33,7 +33,7 @@ class SettingsSection(BaseModel):
 class ModelConfiguration(SettingsSection):
     provider: Literal["ollama", "lm_studio", "openai", "gemini", "openai_compatible"] = "ollama"
     base_url: HttpUrl = HttpUrl("http://127.0.0.1:11550")
-    generation_model: Name = "qwen3:4b-instruct"
+    generation_model: Name = "qwen3:4b"
     embedding_model: Name = "qwen3-embedding:0.6b"
     context_window: PositiveInt = 4096
     max_output_tokens: PositiveInt = 768
@@ -124,15 +124,92 @@ class Reranking(SettingsSection):
     diversity_penalty: float = Field(default=0.10, ge=0.0, le=10.0)
 
 
+class ReflectionSemanticSettings(SettingsSection):
+    enabled: bool = False
+    provider: Literal["ollama"] = "ollama"
+    model: Name = "qwen3:4b"
+    allow_uncertain_assessment: bool = True
+
+
+class ReflectionCorrectionSettings(SettingsSection):
+    allow_targeted_retrieval: bool = True
+    allow_regeneration: bool = True
+    allow_partial_answer: bool = True
+    require_final_validation: bool = True
+    max_query_variants: int = Field(default=2, ge=1, le=3)
+
+
+class ReflectionTracingSettings(SettingsSection):
+    enabled: bool = True
+    store_raw_critiques: bool = False
+
+
 class Reflection(SettingsSection):
     enabled: bool = False
+    mode: Literal["off", "deterministic", "semantic"] = "deterministic"
+    trigger_policy: Literal["on_failure", "always_complex", "explicit"] = "on_failure"
+    max_cycles: int = Field(default=1, ge=0, le=3)
+    max_critique_calls: int = Field(default=1, ge=0, le=3)
+    max_correction_calls: int = Field(default=1, ge=0, le=3)
+    max_additional_retrievals: int = Field(default=2, ge=0, le=5)
+    max_total_model_calls: int = Field(default=3, ge=1, le=6)
     max_retries: int = Field(default=1, ge=0)
+    semantic: ReflectionSemanticSettings = ReflectionSemanticSettings()
+    correction: ReflectionCorrectionSettings = ReflectionCorrectionSettings()
+    tracing: ReflectionTracingSettings = ReflectionTracingSettings()
+
+
+class RSIFeedbackSettings(SettingsSection):
+    enabled: bool = True
+    minimum_samples: int = Field(default=10, ge=1, le=1000)
+    store_raw_queries: bool = False
+
+
+class RSIOptimizationSettings(SettingsSection):
+    llm_enabled: bool = False
+    max_llm_calls_per_cycle: int = Field(default=1, ge=0, le=3)
+    allow_reindexing: bool = False
+    minimum_quality_improvement: float = Field(default=0.03, ge=0.0, le=0.5)
+
+
+class RSIValidationSettings(SettingsSection):
+    require_independent_holdout: bool = True
+    require_live_quality_for_promotion: bool = True
+    max_holdout_finalist_evaluations: int = Field(default=1, ge=1, le=3)
+    max_latency_regression: float = Field(default=0.20, ge=0.0, le=2.0)
+    max_memory_regression: float = Field(default=0.15, ge=0.0, le=2.0)
+
+
+class RSIStorageSettings(SettingsSection):
+    max_cycles_retained: int = Field(default=100, ge=1, le=1000)
+    max_storage_mb: int = Field(default=256, ge=1, le=4096)
+
+
+class RSIPromotionSettings(SettingsSection):
+    require_owner_approval: Literal[True] = True
+    allow_offline_promotion: bool = False
 
 
 class RSI(SettingsSection):
     enabled: bool = False
     automatic_promotion: Literal[False] = False
+    automatic_rollback: Literal[False] = False
+    automatic_scheduling: Literal[False] = False
     require_human_approval: Literal[True] = True
+    optimization_strategy: Literal[
+        "coordinate_search", "seeded_random_search", "local_refinement", "pareto_selection"
+    ] = "coordinate_search"
+    max_cycles: int = Field(default=2, ge=1, le=5)
+    max_candidates_per_cycle: int = Field(default=3, ge=1, le=10)
+    max_experiments: int = Field(default=6, ge=1, le=20)
+    max_concurrent_experiments: Literal[1] = 1
+    max_execution_seconds: float = Field(default=300.0, gt=0.0, le=3600.0)
+    seed: int = Field(default=42, ge=0)
+    feedback: RSIFeedbackSettings = RSIFeedbackSettings()
+    optimization: RSIOptimizationSettings = RSIOptimizationSettings()
+    validation: RSIValidationSettings = RSIValidationSettings()
+    storage: RSIStorageSettings = RSIStorageSettings()
+    promotion: RSIPromotionSettings = RSIPromotionSettings()
 
     @field_validator("automatic_promotion", "require_human_approval", mode="before")
     @classmethod
@@ -189,6 +266,148 @@ class EmbeddingCache(SettingsSection):
     max_size_mb: int = Field(default=256, ge=1, le=4096)
 
 
+class RagSettings(SettingsSection):
+    enabled: bool = True
+    default_retrieval_mode: Literal["dense", "sparse", "hybrid"] = "hybrid"
+    max_evidence_items: int = Field(default=5, ge=1, le=20)
+    allow_partial_answers: bool = True
+    require_citations: bool = True
+    reranking_enabled: bool = False
+    max_output_bytes: int = Field(default=16384, ge=256, le=65536)
+    max_claims: int = Field(default=16, ge=1, le=64)
+
+
+class ContextSettings(SettingsSection):
+    max_context_tokens: PositiveInt = 4096
+    system_token_budget: PositiveInt = 384
+    question_token_budget: PositiveInt = 256
+    history_token_budget: PositiveInt = 384
+    evidence_token_budget: PositiveInt = 2048
+    reserved_output_tokens: PositiveInt = 768
+    safety_margin_tokens: PositiveInt = 256
+    oversized_question_policy: Literal["reject", "truncate"] = "reject"
+
+    @model_validator(mode="after")
+    def check_budgets(self) -> Self:
+        allocated = (
+            self.system_token_budget
+            + self.question_token_budget
+            + self.history_token_budget
+            + self.evidence_token_budget
+            + self.reserved_output_tokens
+            + self.safety_margin_tokens
+        )
+        if allocated > self.max_context_tokens:
+            raise ValueError("allocated context token budgets exceed max_context_tokens")
+        return self
+
+
+class PromptSettings(SettingsSection):
+    default_template: Name = "grounded_v1"
+
+
+class CitationSettings(SettingsSection):
+    validate_identifiers: bool = True
+    reject_unknown_sources: bool = True
+
+
+class ConversationSettings(SettingsSection):
+    enabled: bool = True
+    max_history_messages: int = Field(default=6, ge=0, le=32)
+    persist_history: Literal[False] = False
+
+
+class TracingSettings(SettingsSection):
+    enabled: bool = True
+    store_raw_prompts: bool = False
+    store_raw_questions: bool = False
+    max_records: int = Field(default=10000, ge=1, le=100_000)
+
+
+class AdaptiveRagSettings(SettingsSection):
+    enabled: bool = True
+    default_strategy: Literal["baseline", "adaptive"] = "baseline"
+    max_query_variants: int = Field(default=3, ge=1, le=10)
+    max_subqueries: int = Field(default=3, ge=1, le=10)
+    max_retrieval_executions: int = Field(default=4, ge=1, le=16)
+    max_aggregate_candidates: int = Field(default=80, ge=5, le=500)
+    max_planning_llm_calls: int = Field(default=1, ge=0, le=3)
+    request_deadline_seconds: float = Field(default=30.0, gt=0.0, le=300.0)
+
+
+class QueryAnalysisSettings(SettingsSection):
+    enabled: bool = True
+    classifier: Literal["heuristic", "hybrid"] = "heuristic"
+    llm_classification_enabled: bool = False
+
+
+class QueryRewritingSettings(SettingsSection):
+    enabled: bool = True
+    llm_enabled: bool = False
+    preserve_original: bool = True
+    prompt_template: Name = "rewrite_v1"
+    max_rewrite_length: int = Field(default=512, ge=16, le=4096)
+
+
+class QueryDecompositionSettings(SettingsSection):
+    enabled: bool = True
+    llm_enabled: bool = False
+    max_depth: Literal[1] = 1
+    max_subqueries: int = Field(default=3, ge=1, le=5)
+    prompt_template: Name = "decompose_v1"
+
+
+class MultiQuerySettings(SettingsSection):
+    enabled: bool = True
+    original_weight: float = Field(default=1.0, gt=0.0, le=10.0)
+    rewrite_weight: float = Field(default=0.8, ge=0.0, le=10.0)
+    subquery_weight: float = Field(default=0.7, ge=0.0, le=10.0)
+    normalize_variant_weights: bool = True
+    variant_weight_cap: float = Field(default=1.5, gt=0.0, le=10.0)
+    rrf_k: PositiveInt = 60
+
+
+class RetrievalCacheSettings(SettingsSection):
+    enabled: bool = True
+    max_entries: int = Field(default=256, ge=1, le=10_000)
+    ttl_seconds: float = Field(default=300.0, gt=0.0, le=86400.0)
+
+
+class EvaluationJudgeSettings(SettingsSection):
+    enabled: bool = False
+    provider: Literal["ollama"] = "ollama"
+    model: Name = "qwen3:4b"
+    max_calls_per_case: int = Field(default=1, ge=1, le=5)
+
+
+class EvaluationStatisticsSettings(SettingsSection):
+    confidence_level: float = Field(default=0.95, gt=0.5, lt=1.0)
+    bootstrap_samples: int = Field(default=1000, ge=100, le=10000)
+    seed: int = Field(default=42, ge=0)
+
+
+class EvaluationStorageSettings(SettingsSection):
+    max_runs: int = Field(default=100, ge=1, le=1000)
+    max_storage_mb: int = Field(default=256, ge=1, le=4096)
+
+
+class EvaluationSettings(SettingsSection):
+    enabled: bool = True
+    default_execution_mode: Literal["offline", "synthetic", "live", "human_annotated"] = "offline"
+    max_cases_per_run: int = Field(default=200, ge=1, le=1000)
+    max_concurrent_runs: Literal[1] = 1
+    persist_raw_inputs: bool = False
+    judge: EvaluationJudgeSettings = EvaluationJudgeSettings()
+    statistics: EvaluationStatisticsSettings = EvaluationStatisticsSettings()
+    storage: EvaluationStorageSettings = EvaluationStorageSettings()
+
+
+class ExperimentsSettings(SettingsSection):
+    enabled: bool = True
+    automatic_promotion: Literal[False] = False
+    max_candidate_configurations: int = Field(default=5, ge=1, le=20)
+
+
 class Settings(SettingsSection):
     provider: ProviderSettings = ProviderSettings()
     embedding_cache: EmbeddingCache = EmbeddingCache()
@@ -200,6 +419,20 @@ class Settings(SettingsSection):
     sparse: Sparse = Sparse()
     fusion: Fusion = Fusion()
     reranking: Reranking = Reranking()
+    rag: RagSettings = RagSettings()
+    context: ContextSettings = ContextSettings()
+    prompts: PromptSettings = PromptSettings()
+    citations: CitationSettings = CitationSettings()
+    conversation: ConversationSettings = ConversationSettings()
+    tracing: TracingSettings = TracingSettings()
+    adaptive_rag: AdaptiveRagSettings = AdaptiveRagSettings()
+    query_analysis: QueryAnalysisSettings = QueryAnalysisSettings()
+    query_rewriting: QueryRewritingSettings = QueryRewritingSettings()
+    query_decomposition: QueryDecompositionSettings = QueryDecompositionSettings()
+    multi_query: MultiQuerySettings = MultiQuerySettings()
+    retrieval_cache: RetrievalCacheSettings = RetrievalCacheSettings()
+    evaluation: EvaluationSettings = EvaluationSettings()
+    experiments: ExperimentsSettings = ExperimentsSettings()
     reflection: Reflection = Reflection()
     rsi: RSI = RSI()
     storage: Storage = Storage()

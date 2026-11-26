@@ -8,15 +8,21 @@ from typing import Annotated, Literal
 import httpx
 from fastapi import Depends, FastAPI, Request, Response
 from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from .analyzer import TextAnalyzer
 from .config import Settings, load_settings
+from .conversation import ConversationStore
 from .coordinator import Coordinator
+from .dataset_registry import DatasetRegistry
 from .document_api import router as document_router
 from .embedding_engine import EmbeddingEngine
 from .errors import IngestionError, ResourceUnavailable
+from .experiment_runner import ExperimentRunner
+from .experiment_store import ExperimentStore
+from .graph_api import router as graph_router
 from .hybrid_retrieval import HybridRetriever
 from .inference_api import InferenceServices, InferenceStatus, inference_status
 from .inference_api import router as inference_router
@@ -25,10 +31,15 @@ from .ingestion import IngestionService
 from .inventory import ModelAvailability, inspect_models
 from .observability import application_logger
 from .ollama import Ollama, is_loopback
+from .rag_service import RAGService
 from .resources import ResourceManager
 from .retrieval import DenseRetriever
+from .rsi_engine import RSIEngine
+from .rsi_interfaces import RSIFeedbackInterface
+from .rsi_store import RSIStore
 from .sparse_index import SparseIndex
 from .sparse_retrieval import SparseRetriever
+from .tracing import TraceStore
 
 
 @dataclass(frozen=True)
@@ -89,6 +100,27 @@ def create_app(
             dense_retriever = DenseRetriever(active, embeddings)
             sparse_retriever = SparseRetriever(active, sparse_index, analyzer)
             hybrid_retriever = HybridRetriever(active, dense_retriever, sparse_retriever, analyzer)
+            trace_store = TraceStore(
+                active.storage.database_path, active.tracing, active.storage.busy_timeout_ms
+            )
+            conversation_store = ConversationStore(active.conversation)
+            rag_service = RAGService(
+                active, hybrid_retriever, coordinator, trace_store, conversation_store
+            )
+            dataset_registry = DatasetRegistry()
+            experiment_store = ExperimentStore(
+                active.storage.database_path,
+                active.evaluation.storage,
+                active.storage.busy_timeout_ms,
+            )
+            experiment_runner = ExperimentRunner(
+                active, dataset_registry, experiment_store, rag_service
+            )
+            rsi_store = RSIStore(
+                active.storage.database_path, active.rsi.storage, active.storage.busy_timeout_ms
+            )
+            rsi_feedback = RSIFeedbackInterface(active, trace_store)
+            rsi_engine = RSIEngine(active, rsi_store, rsi_feedback, experiment_runner)
             app.state.inference = InferenceServices(
                 active,
                 provider,
@@ -98,6 +130,10 @@ def create_app(
                 Semaphore(active.provider.max_connections + 1),
                 sparse_index,
                 hybrid_retriever,
+                rag_service,
+                dataset_registry,
+                experiment_runner,
+                rsi_engine,
             )
             logger.info("application.started")
             try:
@@ -109,8 +145,15 @@ def create_app(
                 logger.info("application.stopped")
 
     app = FastAPI(title="EvoRag", version=version("evorag"), lifespan=lifespan)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
+        allow_methods=["GET", "POST"],
+        allow_headers=["*"],
+    )
     app.include_router(document_router)
     app.include_router(inference_router)
+    app.include_router(graph_router)
 
     @app.exception_handler(ProviderError)
     async def provider_error(request: Request, exc: ProviderError) -> JSONResponse:

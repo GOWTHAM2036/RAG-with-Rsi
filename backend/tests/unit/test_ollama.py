@@ -27,7 +27,7 @@ async def adapter(
 
 
 REQUEST = GenerationRequest(messages=(Message(role="user", content="test"),))
-GEN = "qwen3:4b-instruct"
+GEN = "qwen3:4b"
 EMBED = "qwen3-embedding:0.6b"
 
 
